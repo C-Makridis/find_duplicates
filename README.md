@@ -11,3 +11,6 @@ For efficiency, the proccess has been split into two phases:
 ## Examples:
 	python find_duplicates.py /home/user/Downloads /home/user/Pictures/
 	python find_duplicates.py "C:\\Users\\My Name\\Documents" "D:\\Backup\\Documents"
+
+ ## Note:
+ Depending on the number and size of duplicate files, this can take a loooooot of time!
