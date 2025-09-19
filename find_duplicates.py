@@ -20,6 +20,60 @@ import sys
 import hashlib
 import argparse
 
+def arguments_Parser():
+	parser = argparse.ArgumentParser(
+		description='Find duplicate files based on MD5 checksums.',
+		epilog=r'''
+Examples:
+%(prog)s /home/user/Downloads /home/user/Pictures/
+%(prog)s "C:\Users\My Name\Documents" "D:\Backup\Documents"
+		''',
+		formatter_class=argparse.RawDescriptionHelpFormatter
+	)
+	parser.add_argument('folders', nargs='+', help='One or more folders to search for duplicates in.')
+	args = parser.parse_args()
+	return args
+
+def build_size_table(args):
+	sizeTable = dict()
+	filecounter = 0
+	filerr = 0
+	for root in args.folders: # for each folder given
+		for current, dirs, files in os.walk(root): # loop though its contents
+			for fname in files: # and for each file you find
+				fullname = os.path.join(current, fname)
+				filecounter += 1
+				try:
+					myfilesize = os.path.getsize(os.path.join(current, fname))
+					print('.', end='', flush=True) # Progressbar 
+				except (PermissionError, FileNotFoundError, OSError) as e:
+					print('E', end='', flush=True) # Progressbar
+					filerr += 1
+					continue
+				if myfilesize in sizeTable:
+					sizeTable[myfilesize] += (fullname, )
+				else:
+					sizeTable[myfilesize] = (fullname, )
+	return filecounter, sizeTable, filerr
+
+def hash_suspected_files(sizeTable, filerr):
+	hashtable = dict()
+	for size, filepaths in sizeTable.items():
+		if len(filepaths) > 1:
+			for fullname in filepaths:
+				try:
+					myfileshash = md5Checksum(fullname)
+					print('C', end='', flush=True) # Progressbar
+				except (PermissionError, FileNotFoundError, OSError) as e:
+					print('E', end='', flush=True) # Progressbar
+					filerr += 1
+					continue
+				if myfileshash in hashtable:
+					hashtable[myfileshash] +=  (fullname, )
+				else:
+					hashtable[myfileshash] = (fullname, )
+	return hashtable, filerr
+
 def md5Checksum(filePath):
 	with open(filePath, 'rb') as fh:
 		m = hashlib.md5()
@@ -31,53 +85,11 @@ def md5Checksum(filePath):
 		return m.hexdigest()
 
 def main():
-	parser = argparse.ArgumentParser(
-		description='Find duplicate files based on MD5 checksums.',
-		epilog=r'''
-Examples:
-  %(prog)s /home/user/Downloads /home/user/Pictures/
-  %(prog)s "C:\Users\My Name\Documents" "D:\Backup\Documents"
-        ''',
-        formatter_class=argparse.RawDescriptionHelpFormatter
-	)
-	parser.add_argument('folders', nargs='+', help='One or more folders to search for duplicates in.')
-	args = parser.parse_args()
+	args = arguments_Parser()
 	
-	sizeTable = dict()
-	hashtable = dict()
-	filecounter = 0
-	filerr = 0
-
-	for root in args.folders: # for each folder given
-		for current, dirs, files in os.walk(root): # loop though its contents
-			for fname in files: # and for each file you find
-				fullname = os.path.join(current, fname)
-				filecounter += 1
-				print('.', end='', flush=True) # Progressbar 
-				try:
-					myfilesize = os.path.getsize(os.path.join(current, fname))
-				except (PermissionError, FileNotFoundError, OSError) as e:
-					print('E', end='', flush=True) # Progressbar
-					filerr += 1
-					continue
-				if myfilesize in sizeTable:
-					sizeTable[myfilesize] += (fullname, )
-				else:
-					sizeTable[myfilesize] = (fullname, )
-	for size, filepaths in sizeTable.items():
-		if len(filepaths) > 1:
-			for fullname in filepaths:
-				print('C', end='', flush=True) # Progressbar
-				try:
-					myfileshash = md5Checksum(fullname)
-				except (PermissionError, FileNotFoundError, OSError) as e:
-					print('E', end='', flush=True) # Progressbar
-					filerr += 1
-					continue
-				if myfileshash in hashtable:
-					hashtable[myfileshash] +=  (fullname, )
-				else:
-					hashtable[myfileshash] = (fullname, )
+	filecounter, sizeTable, filerr = build_size_table(args) # Create a dict with files that have the same size
+	hashtable, filerr = hash_suspected_files(sizeTable, filerr) # Check md5 of files found having the same size
+	
 	print()
 	
 	duplicates = 0
@@ -88,10 +100,12 @@ Examples:
 			for path in paths:
 				print(f"    - {path}")
 				
+	print('-'*60)
+	
 	if duplicates == 0:
 		print(f"No duplicate files found among {filecounter} files ({filerr} errors.)")
 	else:
-		print(f"{duplicates} duplicate files found among {filecounter} files ({filerr} errors.)")
+		print(f"{duplicates} duplicate files found among {filecounter} files ({filerr} errors)")
 			
 if __name__ == '__main__':
 	main()
