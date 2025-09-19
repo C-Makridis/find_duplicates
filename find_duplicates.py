@@ -109,9 +109,12 @@ def main():
 	print('-'*60)
 	
 	if duplicates == 0:
-		print(f"No duplicate files {' above ' + str(args.greater_than) + ' MB' if args.greater_than else '' } found among {filecounter} files ({filerr} errors.)")
+		print(f"No duplicate files {f'above {args.greater_than} MB' if args.greater_than else '' } found among {filecounter} files ({filerr} errors.) under path(s):")
 	else:
-		print(f"{duplicates} duplicate files {'above ' + str(args.greater_than) + ' MB' if args.greater_than else '' } found among {filecounter} files ({filerr} errors)")
+		print(f"{duplicates} duplicate files {f'above {args.greater_than} MB' if args.greater_than else '' } found among {filecounter} files ({filerr} errors) under path(s):")
+	for path in args.folders:
+		print(f' * {path}')
+	
 			
 if __name__ == '__main__':
 	main()
