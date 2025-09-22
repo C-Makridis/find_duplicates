@@ -37,7 +37,7 @@ def arguments_Parser():
 	)
 	parser.add_argument('-gt', '--greater-than', type=float, metavar='SIZE_MB', help='Only consider files larger than SIZE_MB megabytes.')
 	parser.add_argument('-d', '--debug', action='store_true', help='Enable verbose debug logging. Note this can create HUGE files.')
-	parser.add_argument('-l', '--log-file', help='Custom log file path. Defaults to current directory.')
+	parser.add_argument('-l', '--log-file', metavar='PATH', help='Custom log file path. Defaults to current directory (./find_duplicates.log).')
 	parser.add_argument('folders', nargs='+', help='One or more folders to search for duplicates in.')
 	return parser.parse_args()
 
