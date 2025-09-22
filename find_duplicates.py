@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Crawl one or more folder(s) to locate duplicate files.
+Crawl one or more folders to locate duplicate files.
 
 For efficiency, the proccess has been split into two phases:
 	1. Files are grouped by size. (Progress: '.' per file)
@@ -19,23 +19,27 @@ import os
 import sys
 import hashlib
 import argparse
+import logging
+
+logger = logging.getLogger(__name__)
 
 def arguments_Parser():
 	parser = argparse.ArgumentParser(
 		prog = 'find_duplicates',
 		description='Find duplicate files based on MD5 checksums.',
 		epilog=r'''
-Examples:
-%(prog)s /home/user/Downloads /home/user/Pictures/
-%(prog)s "C:\Users\My Name\Documents" "D:\Backup\Documents"
-%(prog)s --greater-than 5 /mnt/backup  # Find duplicates larger than 5MB
+	Examples:
+	%(prog)s /home/user/Downloads /home/user/Pictures/
+	%(prog)s "C:\Users\My Name\Documents" "D:\Backup\Documents"
+	%(prog)s --greater-than 5 /mnt/backup  # Find duplicates larger than 5MB
 		''',
 		formatter_class=argparse.RawDescriptionHelpFormatter
 	)
 	parser.add_argument('-gt', '--greater-than', type=float, metavar='SIZE_MB', help='Only consider files larger than SIZE_MB megabytes.')
+	parser.add_argument('-d', '--debug', action='store_true', help='Enable verbose debug logging. Note this can create HUGE files.')
+	parser.add_argument('-l', '--log-file', help='Custom log file path. Defaults to current directory.')
 	parser.add_argument('folders', nargs='+', help='One or more folders to search for duplicates in.')
-	args = parser.parse_args()
-	return args
+	return parser.parse_args()
 
 def build_size_table(args):
 	sizeTable = dict()
@@ -50,9 +54,12 @@ def build_size_table(args):
 				filecounter += 1
 				try:
 					myfilesize = os.path.getsize(fullname)
-					print('.', end='', flush=True) # Progressbar 
+					print('.', end='', flush=True) # Progressbar
+					logger.debug(f"Size of {fullname} is {myfilesize}")
 				except (PermissionError, FileNotFoundError, OSError) as e:
 					print('E', end='', flush=True) # Progressbar
+					logger.error(f"Failed to check file {fullname}")
+					logger.error(str(e))
 					filerr += 1
 					continue
 				if myfilesize > size_threshold_bytes:
@@ -70,8 +77,11 @@ def hash_suspected_files(sizeTable, filerr):
 				try:
 					myfileshash = md5Checksum(fullname)
 					print('C', end='', flush=True) # Progressbar
+					logger.debug(f"Hash of {fullname} is {myfileshash}")
 				except (PermissionError, FileNotFoundError, OSError) as e:
 					print('E', end='', flush=True) # Progressbar
+					logger.error(f"Failed to check file {fullname}")
+					logger.error(str(e))
 					filerr += 1
 					continue
 				if myfileshash in hashtable:
@@ -91,10 +101,20 @@ def md5Checksum(filePath):
 		return m.hexdigest()
 
 def main():
+	
 	args = arguments_Parser()
 	
-	filecounter, sizeTable, filerr = build_size_table(args) # Create a dict with files that have the same size
-	hashtable, filerr = hash_suspected_files(sizeTable, filerr) # Check md5 of files found having the same size
+	log_level = logging.DEBUG if args.debug else logging.INFO
+	log_file = getattr(args, 'log_file', 'find_duplicates.log')
+	
+	logging.basicConfig(filename=log_file, format='%(asctime)s %(levelname)s|%(message)s', datefmt=("%Y-%m-%d %H:%M:%S"), level=log_level)# stream=sys.stdout for console
+	logger.info(f"Starting duplicate search with arguments: {vars(args)}")
+	logger.info("Group files by size.");
+	filecounter, sizeTable, filerr = build_size_table(args)
+	logger.debug(f"{filecounter} files found with {filerr} errors.")
+	logger.info("Hash files with matching sizes.");
+	hashtable, filerr = hash_suspected_files(sizeTable, filerr) 
+	logger.debug(f"{filerr} errors while hashing .")
 	
 	print()
 	
@@ -102,19 +122,31 @@ def main():
 	for filehash, paths in hashtable.items():
 		if len(paths) > 1:
 			print(f"\nDuplicate files found for hash {filehash}:")
-			duplicates += 1
 			for path in paths:
+				duplicates += 1
 				print(f"    - {path}")
-				
+	
 	print('-'*60)
 	
-	if duplicates == 0:
-		print(f"No duplicate files {f'above {args.greater_than} MB' if args.greater_than else '' } found among {filecounter} files ({filerr} errors.) under path(s):")
-	else:
-		print(f"{duplicates} duplicate files {f'above {args.greater_than} MB' if args.greater_than else '' } found among {filecounter} files ({filerr} errors) under path(s):")
+	print(f"{'No' if duplicates == 0 else duplicates } duplicate files {f'above {args.greater_than} MB' if args.greater_than else '' } found among {filecounter} files ({filerr} errors.) under path(s):")
+
+
 	for path in args.folders:
 		print(f' * {path}')
 	
-			
+	logger.info("Run completed.");
+	
 if __name__ == '__main__':
-	main()
+	try:
+		main()
+	except KeyboardInterrupt:
+		try:
+			logger.error("User interrupted execution")
+			sys.exit(1)
+		except NameError:
+			logging.error("User interrupted execution before logger initialization")
+			print("\nInterrupted by user.")
+			sys.exit(1)
+	except Exception as e:
+		logging.critical(f"Unexpected error: {e}")
+		sys.exit(1)
